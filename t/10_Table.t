@@ -207,9 +207,21 @@ ok( ($tb->title( -1))[ 0], $last_title);
 ok( ($tb->body( -1))[ 0], $last_body);
 ok( ($tb->table( -1))[ 0], $last_body);
 
-$tb->clear;
+### separators and rules
+BEGIN { $n_tests += 5 }
+$tb = Text::Table->new( 'aaa', \' x ', 'bbb');
+ok( $tb->rule,            "    x    \n");
+ok( $tb->rule( '='     ), "====x====\n");
+ok( $tb->rule( '=', '+'), "====+====\n");
 
-### test selection
+$tb->add( 'tttttt', '');
+ok( $tb->rule, "       x    \n");
+
+# multiple separators
+$tb = Text::Table->new( 'aaa', \' xxxxx ', \' y ', 'bbb');
+ok( $tb->rule,            "    y    \n");
+
+### column selection
 BEGIN { $n_tests += 5 }
 
 $tb = Text::Table->new( '', '');

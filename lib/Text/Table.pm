@@ -8,7 +8,7 @@ use Text::Aligner qw( align);
 BEGIN {
     use Exporter ();
     use vars qw ($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-    $VERSION     = 0.01;
+    $VERSION     = 0.02;
     @ISA         = qw (Exporter);
     #Give a hoot don't pollute, do not export more than needed by default
     @EXPORT      = qw ();
@@ -60,7 +60,7 @@ sub _parse_spec {
         defined and chomp for $title, $sample;
     }
     defined or $_ = [] for $title, $sample;
-    defined $align or $align = '';
+    defined $align and length $align or $align = 'auto';
     ref eq 'ARRAY' or $_ = [ split /\n/, $_, -1] for $title, $sample;
     unless (
         ref $align eq 'Regex' or
@@ -332,7 +332,7 @@ sub _rule {
     return '' unless $tb->width; # this builds the cache, hence $tb->{ blank}
     my $rule = $tb->_assemble_line( $in_body, $tb->{ blank});
     my ( $char, $alt) = map /(.)/, @_;
-    length $char or $char = ' ';
+    ( defined $char and length $char) or $char = ' ';
     # replace blanks with $char. If $alt is given, replace nonblanks with $alt
     if ( defined $alt ) {
         $rule =~ s/(.)/$1 eq ' ' ? $char : $alt/ge;
