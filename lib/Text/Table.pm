@@ -7,8 +7,7 @@ use Text::Aligner qw( align);
 
 BEGIN {
     use Exporter ();
-    use vars qw ($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-    our $VERSION = ('$Revision: 1.102 $' =~ /(\d+.\d+)/)[ 0];
+    our $VERSION = ('$Revision: 1.107 $' =~ /(\d+.\d+)/)[ 0];
 
 }
 
@@ -95,9 +94,14 @@ sub _parse_spec {
 ### table creation
 
 sub new {
-    my $class = shift;
+    my $tb = bless {}, shift;
+    $tb->_entitle( @_);
+}
 
-    # find active separators and, well separate them. n+1 separators for n cols
+sub _entitle {
+    my $tb = shift; # will be completely overwritten
+    # find active separators and, well separate them from col specs.
+    # n+1 separators for n cols
     my ( @seps, @spec); # separators and column specifications
     my $sep;
     for ( @_ ) {
@@ -126,14 +130,13 @@ sub new {
     align( shift @styles, @$_) for @titles; # in-place alignment
 
     # build data structure
-    my $tb = bless {
+    %$tb = (
         spec => \ @spec,                     # column spec for reuse
         titles => \ @titles,                 # titles, pre-aligned
         cols => [ map [], 1 .. @spec],       # data columns
         forms => [ $title_form, $body_form], # separators condensed
-    }, $class;
+    );
     $tb->_clear_cache;
-    $tb;
 }
 
 # sprintf-format for line assembly, using separators
@@ -158,10 +161,10 @@ sub _recover_separators {
 sub select {
     my $tb = shift;
     my @args = map $tb->_select_group( $_), @_;
-    # get column selection, checking indexes (some have been checked by
+    # get column selection, checking indices (some have been checked by
     # _select_group, but not all)
     my @sel = map $tb->_check_index( $_), grep !_is_sep( $_), @args;
-    # replace indexes with column spec to create subtable
+    # replace indices with column spec to create subtable
     ! _is_sep( $_) and $_ = $tb->{ spec}->[ $_] for @args;
     my $sub = ref( $tb)->new( @args);
     # sneak in data columns
@@ -200,11 +203,21 @@ sub _check_index {
 
 sub _clear_cache { @{ $_[ 0]}{ qw( lines blank)} = (); $_[ 0] }
 
-# add one data line
+# add one data line or split the line into follow-up lines
 sub add {
+    my $tb = shift;
+    $tb->_entitle( ( '') x @_) unless $tb->n_cols;
+
+    $tb->_add( @$_) for _transpose( map [ defined() ? split( $/ ) : '' ], @_);
+    $tb->_clear_cache;
+}   
+
+# add one data line
+sub _add {
     my $tb = shift;
     push @$_, shift for @{ $tb->{ cols}};
     $tb->_clear_cache;
+    $tb;
 }
 
 # add one or more data lines
@@ -214,6 +227,7 @@ sub load {
         defined $_ or $_ = '';
         ref eq 'ARRAY' ? $tb->add( @$_) : $tb->add( split);
     }
+    $tb;
 }
 
 sub clear {
@@ -357,13 +371,20 @@ sub _build_table_lines {
     # *_rule() knows this is done
     $tb->{ blank} = [ map pop @$_, @cols];
 
-    _transpose( $tb->height, @cols); # bye-bye, @cols
+    _transpose_n( $tb->height, @cols); # bye-bye, @cols
 }
 
 # destructively transpose a number of lines/cols from an array of arrayrefs 
-sub _transpose ($@) {
+sub _transpose_n ($@) {
     my $n = shift;
     map [ map shift @$_, @_], 1 .. $n;
+}
+
+# like _transpose_n, but find the number to transpose from max of given
+sub _transpose {
+    my $m;
+    _to_max( $m, scalar @$_) for @_;
+    _transpose_n( $m, @_);
 }
 
 # make a line from a number of formatted data elements
@@ -491,6 +512,10 @@ lines.  Alignment of data and column titles is handled dynamically
 in dependence on the data present.
 
 =head2 Table Creation
+
+In the simplest case, if all you want is a number of (untitled) columns,
+you create an unspecified table and start adding data to it.  The number
+of columns is taken fronm the first line of data.
 
 To specify a table you specify its columns.  A column description
 can contain a title and alignment requirements for the data, both
@@ -709,7 +734,7 @@ selecting columns from an existing table.  Tables created this
 way contain the data from the columns they were built from.
 
 This is done by specifying the columns to select by their index
-(where negative indexes count backward from the last column).
+(where negative indices count backward from the last column).
 The same column can be selected more than once and the sequence
 of columns can be arbitrarily changed.  Separators don't travel
 with columns, but can be specified between the columns at selection
@@ -740,20 +765,25 @@ the space between columns.  The format of the parameters is described under
 L<"Column Specification">. Specifying an invalid alignment for a column
 results in a warning if these are allowed.
 
+If no columns are specified, the number of columns is taken from the first
+line of data added to the table.  The effect is as if you had specified
+C<Text::Table-E<gt>new( ( '') x $n)>, where C<$n> is the number of
+columns.
+
 =item select()
 
     my $sub = $tb->select( $column, ...);
 
 creates a table from the listed columns of the table $tb, including
-the data.  Columns are specified as integer indexes which refer to
+the data.  Columns are specified as integer indices which refer to
 the data columns of $tb.  Columns can be repeated and specified in any
-order.  Negative indexes count from the last column.  If an invalid
+order.  Negative indices count from the last column.  If an invalid
 index is specified, a warning is issued, if allowed.
 
 As with L<"new()">, separators can be interspersed among the column
-indexes and will be used between the columns of the new table.
+indices and will be used between the columns of the new table.
 
-If you enclose some of the arguments (column indexes or separators) in
+If you enclose some of the arguments (column indices or separators) in
 angle brackets C<[...]> (technically, you specify them inside an
 arrayref), they form a group for conditional selection.  The group is
 only included in the resulting table if the first actual column inside
@@ -831,9 +861,16 @@ adds a data line to the table, returns the table.
 
 C<$col1>, ..., C<$colN> are scalars that
 correspond to the table columns.  Undefined entries are converted to '',
-and the results of specifying fewer or more items than the table has
-columns are as can be expected.  Every call to C<add()> increases the
-body height of the table by one.
+and extra data beyond the number of table columns is ignored.
+
+Data entries can be multi-line strings.  The partial strings all go into
+the same column.  The corresponding fields of other columns remain empty
+unless there is another multi-line entry in that column that fills the
+fieds.  Adding a line with multi-line entries is equivalent to adding
+multiple lines.
+
+Every call to C<add()> increases the body height of the table by the
+number of effective lines, one in the absence of multiline entries.
 
 =item load()
 
@@ -845,8 +882,7 @@ Every argument to C<load()> represents a data line to be added to the
 table.  The line can be given as an array(ref) containing the data
 items, or as a string, which is split on whitespace to retrieve the
 data.  If an undefined argument is given, it is treated as an
-empty line.  Each call to C<load()> increases the body height of the
-table by the number of its arguments.
+empty line.
 
 =item clear()
 
@@ -950,6 +986,10 @@ can also be called as an object method (C<$tb-E<gt>warnings( ...)>).
 
 =back
 
+=head1 VERSION
+    
+This document pertains to Text::Table version 1.107
+
 =head1 BUGS
 
 =over 4
@@ -959,10 +999,6 @@ can also be called as an object method (C<$tb-E<gt>warnings( ...)>).
 I<auto> alignment doesn't support alternative characters for the decimal
 point.  This is actually a bug in the underlying Text::Aligner by the
 same author.
-
-=item o
-
-Test coverage is uneven.
 
 =back
 

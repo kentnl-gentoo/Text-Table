@@ -29,3 +29,10 @@ Revision history for Perl extension Text::Table.
   a table with no data
 - planned for release 6
 
+1.107 Tue Sep 21 20:47:07 CEST 2004
+- Added a feature where rows with embedded newlines are expanded
+  into following rows. (by Josh Jore)
+- Added a feature where ->add and ->load return the table object
+  enabling chained method calls. (by Josh Jore)
+- Added auto-initialisation.  An unspecified table creates the
+  requisite number of title-less columns on first data entry.

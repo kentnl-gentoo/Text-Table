@@ -112,17 +112,17 @@ ok( $tb->height, 0);
 ok( $tb->width, 0);
 ok( $tb->stringify, '');
 
-# empty table with non-empty data array
+# empty table with non-empty data array (auto-initialisation)
 BEGIN { $n_tests += 4 }
 $tb->load(
 '1 2 3',
 [4, 5, 6],
 '7 8',
 );
-ok( $tb->n_cols, 0);
-ok( $tb->height, 0);
-ok( $tb->width, 0);
-ok( $tb->stringify, '');
+ok( $tb->n_cols, 3);
+ok( $tb->height, 3);
+ok( $tb->width, 5);
+ok( $tb->stringify, "1 2 3\n4 5 6\n7 8  \n");
 
 # single title-less column
 BEGIN { $n_tests += 4 }
@@ -208,6 +208,7 @@ $tb->clear;
 ok( $tb->n_cols, 4);
 ok( $tb->height, 2);
 ok( $tb->width, 24);
+
 
 # access parts of table
 BEGIN { $n_tests += 8 }
@@ -341,5 +342,39 @@ BEGIN { $n_tests += 1 }
 $tb = Text::Table->new( TYP_TITLE);
 $tb->load( TYP_DATA);
 ok( "$tb", TYP_ANS);
+
+# multi-line rows
+BEGIN { $n_tests += 1 }
+$tb = Text::Table->new( qw( A B C ) );
+$tb->load( [ "1", "2", "3" ],
+           [ "a\nb", "c", "d" ],
+           [ "e", "f\ng", "h" ],
+           [ "i", "j", "k\nl" ],
+           [ "m", "n", "o" ] );
+ok( "$tb", <<EOT);
+A B C
+1 2 3
+a c d
+b    
+e f h
+  g  
+i j k
+    l
+m n o
+EOT
+
+# Chained ->load call
+BEGIN { $n_tests += 1 }
+ok( "" . Text::Table
+             -> new( TYP_TITLE )
+             -> load( TYP_DATA ),
+    TYP_ANS );
+
+# Chained ->add call
+BEGIN { $n_tests += 1 }
+ok( "" . Text::Table
+             -> new( "x" x 10 )
+             -> add( "y" x 10 ),
+    "x" x 10 . "\n" . "y" x 10 . "\n");
 
 BEGIN { plan tests => $n_tests }
