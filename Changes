@@ -8,3 +8,7 @@ Revision history for Perl extension Text::Table.
 
 - minor bug fixes concerning spurious warnings
 - released to CPAN Thu Dec  5 01:42:11 CET 2002
+
+0.03  Sun Dec 29 18:03:57 CET 2002
+
+- another spurious warning from _parse_spec fixed, test added

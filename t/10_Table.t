@@ -6,6 +6,19 @@ BEGIN { $n_tests = 0 }
 use Text::Table;
 
 # internal parser functions
+
+# undefined argument
+BEGIN { $n_tests += 6 }
+my $spec = Text::Table::_parse_spec();
+ok( scalar @{ $spec->{ title}}, 0);
+ok( $spec->{ align}, 'auto');
+ok( scalar @{ $spec->{ sample}}, 0);
+$spec = Text::Table::_parse_spec( undef);
+ok( scalar @{ $spec->{ title}}, 0);
+ok( $spec->{ align}, 'auto');
+ok( scalar @{ $spec->{ sample}}, 0);
+
+# other functions
 use constant T_EMPTY  => <<EOT1;
 EOT1
 use constant T_SINGLE => <<EOT2;

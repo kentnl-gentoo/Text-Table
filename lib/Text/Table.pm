@@ -8,7 +8,7 @@ use Text::Aligner qw( align);
 BEGIN {
     use Exporter ();
     use vars qw ($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-    $VERSION     = 0.02;
+    $VERSION     = 0.03;
     @ISA         = qw (Exporter);
     #Give a hoot don't pollute, do not export more than needed by default
     @EXPORT      = qw ();
@@ -29,6 +29,7 @@ sub _is_sep {
 
 sub _parse_sep {
     local $_ = shift;
+    defined $_ or $_ = '';
     my ( $title, $body);
     if ( ref eq 'HASH' ) {
         ( $title, $body) = @{ $_}{ qw( title body)};
@@ -46,6 +47,7 @@ sub _parse_sep {
 
 sub _parse_spec {
     local $_ = shift;
+    defined $_ or $_ = '';
     my $alispec = qr/^ *(?:left|center|right|num|point|auto)/;
     my ( $title, $align, $sample);
     if ( ref eq 'HASH' ) {
