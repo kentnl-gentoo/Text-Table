@@ -8,7 +8,7 @@ use Text::Aligner qw( align);
 BEGIN {
     use Exporter ();
     use vars qw ($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-    $VERSION     = 0.03;
+    $VERSION     = 0.04;
     @ISA         = qw (Exporter);
     #Give a hoot don't pollute, do not export more than needed by default
     @EXPORT      = qw ();
@@ -127,6 +127,14 @@ sub _compile_format {
    defined or $_ = ' ' for @seps; # others default to single space
    s/%/%%/g for @seps; # protect against sprintf
    join '%s', @seps;
+}
+
+# reverse format compilation (currently not used)
+sub _recover_separators {
+    my $format = shift;
+    my @seps = split /(?<!%)%s/, $format;
+    s/%%/%/g for @seps;
+    @seps;
 }
 
 # select some columns, (optionally if in [...]), and add new separators
@@ -258,7 +266,6 @@ sub _table_portion {
     my @lines = do {
         my $limit = $tb->title_height; # title format below
         $from += $offset;
-        die "gah" unless defined $n;
         map $tb->_assemble_line( $_ >= $limit, $tb->_table_line( $_)),
             $from .. $from + $n - 1;
     };
@@ -849,13 +856,13 @@ line of table width.  Another useful combo is C<$tb-E<lt>rule( '-', '+')>,
 together with separators that contain a single nonblank "|", for a
 popular representation of line crossings.
 
-C<rule()> uses the column separators for the body section if there
+C<rule()> uses the column separators for the title section if there
 is a difference.
 
-=item title_rule()
+=item body_rule()
 
-C<title_rule()> works like <rule()>, except the rule is generated using
-the column separators for the table title.
+C<body_rule()> works like <rule()>, except the rule is generated using
+the column separators for the table body.
 
 =back
 

@@ -221,7 +221,7 @@ ok( ($tb->body( -1))[ 0], $last_body);
 ok( ($tb->table( -1))[ 0], $last_body);
 
 ### separators and rules
-BEGIN { $n_tests += 5 }
+BEGIN { $n_tests += 7 }
 $tb = Text::Table->new( 'aaa', \' x ', 'bbb');
 ok( $tb->rule,            "    x    \n");
 ok( $tb->rule( '='     ), "====x====\n");
@@ -232,7 +232,12 @@ ok( $tb->rule, "       x    \n");
 
 # multiple separators
 $tb = Text::Table->new( 'aaa', \' xxxxx ', \' y ', 'bbb');
-ok( $tb->rule,            "    y    \n");
+ok( $tb->rule, "    y    \n");
+
+# different separators in head and body
+$tb = Text::Table->new( 'aaa', \"x\ny", 'bbb');
+ok( $tb->rule, "   x   \n");
+ok( $tb->body_rule, "   y   \n");
 
 ### column selection
 BEGIN { $n_tests += 5 }
