@@ -151,7 +151,7 @@ ok( $tb->width, 0);
 ok( $tb->stringify, '');
 
 # do samples work?
-BEGIN { $n_tests += 4 }
+BEGIN { $n_tests += 5 }
 $tb = Text::Table->new( { sample => 'xxxx'});
 $tb->load( '0');
 ok( $tb->width, 4);
@@ -159,6 +159,11 @@ ok( $tb->height, 1);
 $tb->load( '12345');
 ok( $tb->width, 5);
 ok( $tb->height, 2);
+# samples should be considered in title alignment even with no data
+my $tit;
+$tb = Text::Table->new( { title => 'x', sample => 'xxx'});
+chomp( $tit = $tb->title( 0));
+ok( $tit, 'x  ');
 
 # overall functional check with typical table
 use constant TYP_TITLE => 
@@ -260,6 +265,53 @@ ok( ($tb->colrange( 1))[ 1], 3);
 ok( ($tb->colrange( 2))[ 0], 10);
 ok( ($tb->colrange( 2))[ 1], 0);
 
+# body-title alignment
+BEGIN { $n_tests += 4 }
+
+$tb = Text::Table->new( { title => 'x', align_title => 'right' });
+$tb->add( 'xxx');
+chomp( $tit = $tb->title( 0));
+ok( $tit, '  x');
+
+$tb = Text::Table->new( { title => 'x', align_title => 'center' });
+$tb->add( 'xxx');
+chomp( $tit = $tb->title( 0));
+ok( $tit, ' x ');
+
+$tb = Text::Table->new( { title => 'x', align_title => 'left' });
+$tb->add( 'xxx');
+chomp( $tit = $tb->title( 0));
+ok( $tit, 'x  ');
+
+$tb = Text::Table->new( { title => 'x' }); # default?
+$tb->add( 'xxx');
+chomp( $tit = $tb->title( 0));
+ok( $tit, 'x  ');
+
+# title-internal alignment
+BEGIN { $n_tests += 5 }
+
+$tb = Text::Table->new( { title => "x\nxxx", align_title_lines => 'right'});
+chomp( ( $tit) = $tb->title); # first line
+ok( $tit, '  x');
+
+$tb = Text::Table->new( { title => "x\nxxx", align_title_lines => 'center'});
+chomp( ( $tit) = $tb->title); # first line
+ok( $tit, ' x ');
+
+$tb = Text::Table->new( { title => "x\nxxx", align_title_lines => 'left'});
+chomp( ( $tit) = $tb->title); # first line
+ok( $tit, 'x  ');
+
+# default?
+$tb = Text::Table->new( { title => "x\nxxx"});
+chomp( ( $tit) = $tb->title); # first line
+ok( $tit, 'x  ');
+
+# default propagation from 'align_title'
+$tb = Text::Table->new( { title => "x\nxxx", align_title => 'right'});
+chomp( ( $tit) = $tb->title);
+ok( $tit, '  x');
 
 ### column selection
 BEGIN { $n_tests += 5 }

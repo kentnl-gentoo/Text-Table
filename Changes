@@ -19,3 +19,13 @@ Revision history for Perl extension Text::Table.
 
 0.05 Sun Feb 16 17:51:49 CET 2003
 - added method colrange (see bug id 2053)
+
+1.100 Fri Sep 12 17:34:40 CEST 2003
+- Version jump to make module version and cvs version equal (and compatible)
+
+1.102 Fri Sep 12 20:59:34 CEST 2003
+- Added features align_title and align_title_lines
+- fixed a bug with samples, which weren't honored in title alignment in
+  a table with no data
+- planned for release 6
+

@@ -8,12 +8,8 @@ use Text::Aligner qw( align);
 BEGIN {
     use Exporter ();
     use vars qw ($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-    $VERSION     = 0.05;
-    @ISA         = qw (Exporter);
-    #Give a hoot don't pollute, do not export more than needed by default
-    @EXPORT      = qw ();
-    @EXPORT_OK   = qw ();
-    %EXPORT_TAGS = ();
+    our $VERSION = ('$Revision: 1.102 $' =~ /(\d+.\d+)/)[ 0];
+
 }
 
 use overload
@@ -49,9 +45,10 @@ sub _parse_spec {
     local $_ = shift;
     defined $_ or $_ = '';
     my $alispec = qr/^ *(?:left|center|right|num|point|auto)/;
-    my ( $title, $align, $sample);
+    my ( $title, $align, $align_title, $align_title_lines, $sample);
     if ( ref eq 'HASH' ) {
-        ( $title, $align, $sample) = @{ $_}{ qw( title align sample)};
+        ( $title, $align, $align_title, $align_title_lines, $sample) =
+            @{ $_}{ qw( title align align_title align_title_lines sample)};
     } else {
         my $alispec = qr/&(.*)/;
         if ( $_ =~ $alispec ) {
@@ -68,13 +65,30 @@ sub _parse_spec {
         ref $align eq 'Regex' or
         $align =~ /^(?:left|center|right|num\(?|point\(?|auto)/
     ) {
-        _warn( "Invalid alignment specification: '$align', using 'auto'");
+        _warn( "Invalid align specification: '$align', using 'auto'");
         $align = 'auto';
     }
+    defined $align_title and length $align_title or $align_title = 'left';
+    unless ( $align_title =~ /^(?:left|center|right)/ ) {
+        _warn( "Invalid align_title specification: " .
+            "'$align_title', using 'left'",
+        );
+        $align_title = 'left';
+    }
+    defined $align_title_lines and length $align_title_lines or
+        $align_title_lines = $align_title;
+    unless ( $align_title_lines =~ /^(?:left|center|right)/ ) {
+        _warn( "Invalid align_title_lines specification: " .
+            "'$align_title_lines', using 'left'",
+        );
+        $align_title_lines = 'left';
+    }
     {
-        title   => $title,
-        align   => $align,
-        sample  => $sample,
+        title             => $title,
+        align             => $align,
+        align_title       => $align_title,
+        align_title_lines => $align_title_lines,
+        sample            => $sample,
     }
 }
 
@@ -107,7 +121,9 @@ sub new {
     my $title_height = 0;
     _to_max( $title_height, scalar @$_) for @titles;
     push @$_, ( '') x ( $title_height - @$_) for @titles;
-    align( 'left', @$_) for @titles; # ready for use
+#   align( 'left', @$_) for @titles; # ready for use'
+    my @styles = map $_->{ align_title_lines}, @spec;
+    align( shift @styles, @$_) for @titles; # in-place alignment
 
     # build data structure
     my $tb = bless {
@@ -315,6 +331,9 @@ sub _build_table_lines {
     # copy data columns, replacing undef with ''
     my @cols = map [ map defined() ? $_ : '', @$_], @{ $tb->{ cols}};
 
+    # add set of empty strings for blank line (needed to build horizontal rules)
+    push @$_, '' for @cols;
+
     # add samples for minimum alignment
     my @samples = map $_->{ sample}, @{ $tb->{ spec}};
     push @$_, @{ shift @samples} for @cols;
@@ -322,19 +341,20 @@ sub _build_table_lines {
     # align to style
     my @styles = map $_->{ align}, @{ $tb->{ spec}};
     align( shift @styles, @$_) for @cols;
-    splice @$_, $tb->body_height for @cols; # trim off samples
+    # trim off samples, but leave blank line
+    splice @$_, 1 + $tb->body_height for @cols; # + 1 for blank line (brittle)
 
     # include titles
     my @titles = @{ $tb->{ titles}};
     unshift @$_, @{ shift @titles} for @cols; # add pre-aligned titles
 
-    # add set of empty strings for blank line (needed to build rules)
-    push @$_, '' for @cols;
+    # align title and body portions of columns
+    # blank line will be there even with no data
+    @styles = map $_->{ align_title}, @{ $tb->{ spec}};
+    align( shift @styles, @$_) for @cols; # in-place alignment
 
-    # align table
-    align( 'left', @$_) for @cols; # in-place alignment
-
-    # deposit a blank line. *_rule() knows this is done
+    # deposit a blank line, pulling it off the columns.
+    # *_rule() knows this is done
     $tb->{ blank} = [ map pop @$_, @cols];
 
     _transpose( $tb->height, @cols); # bye-bye, @cols
@@ -419,6 +439,7 @@ use Carp;
     }
 }
 
+__END__
 ########################################### main pod documentation begin ##
 
 =head1 NAME
@@ -473,7 +494,11 @@ in dependence on the data present.
 
 To specify a table you specify its columns.  A column description
 can contain a title and alignment requirements for the data, both
-optional.  The columns are collected in the table in the
+optional.  Additionally, you can specify how the title is aligned with
+the body of a column, and how the lines of a multiline title are
+aligned among themselves.
+
+The columns are collected in the table in the
 order they are given.  On data entry, each column corresponds to
 one data item, and in column selection columns are indexed left to
 right, starting from 0.
@@ -585,18 +610,30 @@ The format is
         title   => $title,
         align   => $align,
         sample  => $sample,
+        align_title => $align_title,
+        align_title_lines => $align_title_lines,
     }
 
 $title contains the title lines and $sample the sample data.  Both can
 be given as a string or as an array-ref to the list of lines.  $align contains
 the alignment style (without a leading ampersand), usually as a string.
 You can also give a regular expression here, which specifies regex alignment.
-This is the only thing you I<must> use the hash form for, a regex cannot be
-given in string form.
+A regex can only be specified in the hash form of a colunm specification.
 
-Do not put other keys than I<title>, I<align>, and I<sample> into a hash
-that specifies a column.  Most would be ignored, but some would confuse
-the interpreter (in particular, I<is_sep> has to be avoided).
+In hash form you can also specify how the title of a column is aligned
+with its body.  To do this, you specify the keyword C<align_title> with
+C<left>, C<right> or C<center>.  Other alignment specifications are not
+valid here.  The default is C<left>.
+
+C<align_title> also specifies how the lines of a multiline title are
+aligned among themselves.  If you want a different alignment, you
+can specify it with the key C<align_title_lines>.  Again, only C<left>,
+C<right> or C<center> are allowed.
+
+Do not put other keys than those mentioned above (I<title>, I<align>,
+I<align_title>, I<align_title_lines>, and I<sample>) into a hash that
+specifies a column.  Most would be ignored, but some would confuse the
+interpreter (in particular, I<is_sep> has to be avoided).
 
 =item Separators as strings
 
@@ -952,4 +989,3 @@ Text::Aligner, perl(1).
 =cut
 
 1;
-__END__

@@ -17,3 +17,4 @@ CVS/.*
 _uu$
 ^ttt*
 ^dist/
+^.cvs
