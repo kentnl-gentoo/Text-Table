@@ -16,3 +16,6 @@ Revision history for Perl extension Text::Table.
   body_rule(). (It described rule() wrongly and listed non-existent
   title_rule() instead of body_rule())
 - Added test for body_rule().
+
+0.05 Sun Feb 16 17:51:49 CET 2003
+- added method colrange (see bug id 2053)

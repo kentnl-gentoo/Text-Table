@@ -8,7 +8,7 @@ use Text::Aligner qw( align);
 BEGIN {
     use Exporter ();
     use vars qw ($VERSION @ISA @EXPORT @EXPORT_OK %EXPORT_TAGS);
-    $VERSION     = 0.04;
+    $VERSION     = 0.05;
     @ISA         = qw (Exporter);
     #Give a hoot don't pollute, do not export more than needed by default
     @EXPORT      = qw ();
@@ -129,10 +129,10 @@ sub _compile_format {
    join '%s', @seps;
 }
 
-# reverse format compilation (currently not used)
+# reverse format compilation (used by colrange())
 sub _recover_separators {
     my $format = shift;
-    my @seps = split /(?<!%)%s/, $format;
+    my @seps = split /(?<!%)%s/, $format, -1;
     s/%%/%/g for @seps;
     @seps;
 }
@@ -227,6 +227,24 @@ BEGIN { *height = \ &table_height} # alias
 # number of characters in each table line. need to build the table to know
 sub width {
     $_[ 0]->height and length( ($_[ 0]->table( 0))[ 0]) - 1;
+}
+
+# start and width of each column
+sub colrange {
+    my ( $tb, $col_index) = @_;
+    return ( 0, 0) unless $tb->width; # width called, $tb->{ blank} exists now
+    $col_index ||= 0;
+    $col_index += $tb->n_cols if $col_index < 0;
+    _to_max( $col_index, 0);
+    _to_min( $col_index, $tb->n_cols);
+    my @widths = map length, @{ $tb->{ blank}}, '';
+    @widths = @widths[ 0 .. $col_index];
+    my $width = pop @widths;
+    my $pos = 0;
+    $pos += $_ for @widths;
+    my @seps = _recover_separators( $tb->{ forms}->[ 0]);
+    $pos += length for @seps[ 0 .. $col_index];
+    return ( $pos, $width);
 }
 
 ## printable output
@@ -335,6 +353,7 @@ sub _assemble_line {
     sprintf( $tb->{ forms}->[ !!$in_body], @{ shift()}) . "\n";
 }
 
+# build a rule line
 sub _rule {
     my $tb = shift;
     my $in_body = shift;
@@ -751,6 +770,15 @@ returns the number of title lines in a table.
 
 returns the number of lines in the table body, which is the number
 of data lines that were entered via L<"add()"> or L<"load()">.
+
+=item colrange()
+
+    $tb->colrange( $i)
+
+returns the start position and width of the $i-th column (counting from 0)
+of the table.  If $i is negative, counts from the end of the table.  If $i
+is larger than the greatesit column index, an imaginary column of width 0
+is assumed right of the table.
 
 =back
 

@@ -212,7 +212,6 @@ ok( join( '', $tb->title), TYP_TITLE_ANS);
 ok( join( '', $tb->body), TYP_BODY_ANS);
 my ( $first_title, $last_title) = ( TYP_TITLE_ANS =~ /(.*\n)/g)[ 0, -1];
 my ( $first_body, $last_body) = ( TYP_BODY_ANS =~ /(.*\n)/g)[ 0, -1];
-# $_ .= "\n" for $first_title, $last_title, $first_body, $last_body;
 ok( ($tb->title( 0))[ 0], $first_title);
 ok( ($tb->body( 0))[ 0], $first_body);
 ok( ($tb->table( 0))[ 0], $first_title);
@@ -238,6 +237,29 @@ ok( $tb->rule, "    y    \n");
 $tb = Text::Table->new( 'aaa', \"x\ny", 'bbb');
 ok( $tb->rule, "   x   \n");
 ok( $tb->body_rule, "   y   \n");
+
+### colrange
+BEGIN { $n_tests += 16 }
+$tb = Text::Table->new( 'aaa', \"|", 'bbb');
+ok( ($tb->colrange( 0))[ 0], 0);
+ok( ($tb->colrange( 0))[ 1], 3);
+ok( ($tb->colrange( 1))[ 0], 4);
+ok( ($tb->colrange( 1))[ 1], 3);
+ok( ($tb->colrange( 2))[ 0], 7);
+ok( ($tb->colrange( 2))[ 1], 0);
+ok( ($tb->colrange( 9))[ 0], 7);
+ok( ($tb->colrange( 9))[ 1], 0);
+ok( ($tb->colrange( -1))[ 0], 4);
+ok( ($tb->colrange( -1))[ 1], 3);
+
+$tb->add( 'xxxxxx', 'yy');
+ok( ($tb->colrange( 0))[ 0], 0);
+ok( ($tb->colrange( 0))[ 1], 6);
+ok( ($tb->colrange( 1))[ 0], 7);
+ok( ($tb->colrange( 1))[ 1], 3);
+ok( ($tb->colrange( 2))[ 0], 10);
+ok( ($tb->colrange( 2))[ 1], 0);
+
 
 ### column selection
 BEGIN { $n_tests += 5 }
