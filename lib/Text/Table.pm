@@ -7,7 +7,7 @@ use Text::Aligner qw( align);
 
 BEGIN {
     use Exporter ();
-    our $VERSION = ('$Revision: 1.107 $' =~ /(\d+.\d+)/)[ 0];
+    our $VERSION = ('$Revision: 1.114 $' =~ /(\d+.\d+)/)[ 0];
 
 }
 
@@ -383,7 +383,7 @@ sub _transpose_n ($@) {
 # like _transpose_n, but find the number to transpose from max of given
 sub _transpose {
     my $m;
-    _to_max( $m, scalar @$_) for @_;
+    _to_max( $m, scalar @$_) for @_, []; # make sure $m is defined
     _transpose_n( $m, @_);
 }
 
@@ -835,8 +835,7 @@ returns the number of title lines in a table.
 
     $tb->body_height
 
-returns the number of lines in the table body, which is the number
-of data lines that were entered via L<"add()"> or L<"load()">.
+returns the number of lines in the table body.
 
 =item colrange()
 
@@ -844,7 +843,7 @@ of data lines that were entered via L<"add()"> or L<"load()">.
 
 returns the start position and width of the $i-th column (counting from 0)
 of the table.  If $i is negative, counts from the end of the table.  If $i
-is larger than the greatesit column index, an imaginary column of width 0
+is larger than the greatest column index, an imaginary column of width 0
 is assumed right of the table.
 
 =back

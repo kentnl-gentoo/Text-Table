@@ -36,3 +36,10 @@ Revision history for Perl extension Text::Table.
   enabling chained method calls. (by Josh Jore)
 - Added auto-initialisation.  An unspecified table creates the
   requisite number of title-less columns on first data entry.
+
+1.114 Sat Feb 16 13:52:19 CET 2008
+- Changed the documentation to reflect the possibility of multiline
+  data (by daotoad).
+      Sun May 11 13:37:44 CEST 2008
+- Fixed spurious warning with ->load([])
+- Released

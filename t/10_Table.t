@@ -165,6 +165,18 @@ $tb = Text::Table->new( { title => 'x', sample => 'xxx'});
 chomp( $tit = $tb->title( 0));
 ok( $tit, 'x  ');
 
+# load without data
+$tb = Text::Table->new();
+BEGIN { $n_tests += 2 }
+{
+    my $warncount = 0;
+    local $SIG{__WARN__} = sub { ++ $warncount };
+    $tb->load();
+    ok($warncount, 0);
+    $tb->load([]);
+    ok($warncount, 0);
+}
+
 # overall functional check with typical table
 use constant TYP_TITLE => 
     { title => 'name', align => 'left'},

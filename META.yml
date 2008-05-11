@@ -1,11 +1,14 @@
-# http://module-build.sourceforge.net/META-spec.html
-#XXXXXXX This is a prototype!!!  It will change in the future!!! XXXXX#
-name:         Text-Table
-version:      1.107
-version_from: lib/Text/Table.pm
-installdirs:  site
-requires:
+--- #YAML:1.0
+name:                Text-Table
+version:             1.114
+abstract:            Organize Data in Tables
+license:             ~
+author:              
+    - Anno Siegel (siegel@zrz.tu-berlin.de)
+generated_by:        ExtUtils::MakeMaker version 6.42
+distribution_type:   module
+requires:     
     Text::Aligner:                 0.01
-
-distribution_type: module
-generated_by: ExtUtils::MakeMaker version 6.21
+meta-spec:
+    url:     http://module-build.sourceforge.net/META-spec-v1.3.html
+    version: 1.3
