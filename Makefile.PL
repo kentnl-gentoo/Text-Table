@@ -6,5 +6,8 @@ WriteMakefile(
     VERSION_FROM => 'lib/Text/Table.pm', # finds $VERSION
     AUTHOR       => 'Anno Siegel (siegel@zrz.tu-berlin.de)',
     ABSTRACT     => 'Organize Data in Tables',
-    PREREQ_PM    => { 'Text::Aligner' => 0.01 },
+    PREREQ_PM    => {
+        'Test::More' => 0,
+        'Text::Aligner' => 0.05,
+    },
 );

@@ -5,6 +5,8 @@ BEGIN { $n_tests = 0 }
 
 use Text::Table;
 
+print "# Version: $Text::Table::VERSION\n";
+
 # internal parser functions
 
 # undefined argument
@@ -124,6 +126,21 @@ ok( $tb->height, 3);
 ok( $tb->width, 5);
 ok( $tb->stringify, "1 2 3\n4 5 6\n7 8  \n");
 
+# run this again with undefined $/, see if there's a warning
+BEGIN { $n_tests += 1 }
+{
+    local $/;
+    my $warncount = 0;
+    local $SIG{__WARN__} = sub { ++ $warncount };
+    $tb = Text::Table->new;
+    $tb->load(
+    '1 2 3',
+    [4, 5, 6],
+    '7 8',
+    );
+    ok($warncount, 0);
+}
+
 # single title-less column
 BEGIN { $n_tests += 4 }
 $tb = Text::Table->new( '');
@@ -220,7 +237,6 @@ $tb->clear;
 ok( $tb->n_cols, 4);
 ok( $tb->height, 2);
 ok( $tb->width, 24);
-
 
 # access parts of table
 BEGIN { $n_tests += 8 }

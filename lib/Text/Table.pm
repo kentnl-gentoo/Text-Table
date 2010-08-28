@@ -6,9 +6,7 @@ use warnings;
 use Text::Aligner qw( align);
 
 BEGIN {
-    use Exporter ();
-    our $VERSION = ('$Revision: 1.114 $' =~ /(\d+.\d+)/)[ 0];
-
+    our $VERSION = 1.116;
 }
 
 use overload
@@ -208,7 +206,7 @@ sub add {
     my $tb = shift;
     $tb->_entitle( ( '') x @_) unless $tb->n_cols;
 
-    $tb->_add( @$_) for _transpose( map [ defined() ? split( $/ ) : '' ], @_);
+    $tb->_add( @$_) for _transpose( map [ defined() ? split( /\n/ ) : '' ], @_);
     $tb->_clear_cache;
 }   
 
@@ -550,6 +548,9 @@ Table data is entered line-wise, each time specifying data entries
 for all table columns.  A bulk loader for many lines at once is also
 available.  You can clear the data from the table for re-use (though
 you will more likely just create another table).
+
+Data can contain colorizing escape sequences (as provided by
+C<Term::AnsiColor>) without upsetting the alignment.
 
 =head2 Table Output
 
