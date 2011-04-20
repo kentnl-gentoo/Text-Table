@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Text-Table
-version:            1.116
+version:            1.117
 abstract:           Organize Data in Tables
 author:
     - Anno Siegel (siegel@zrz.tu-berlin.de)
@@ -11,8 +11,10 @@ configure_requires:
 build_requires:
     ExtUtils::MakeMaker:  0
 requires:
+    strict:         0
     Test::More:     0
     Text::Aligner:  0.05
+    warnings:       0
 no_index:
     directory:
         - t

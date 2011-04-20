@@ -3,10 +3,10 @@ package Text::Table;
 use strict;
 use warnings;
 
-use Text::Aligner qw( align);
+use Text::Aligner qw(align);
 
 BEGIN {
-    our $VERSION = 1.116;
+    our $VERSION = '1.117';
 }
 
 use overload
@@ -398,15 +398,53 @@ sub _rule {
     my $in_body = shift;
     return '' unless $tb->width; # this builds the cache, hence $tb->{ blank}
     my $rule = $tb->_assemble_line( $in_body, $tb->{ blank});
-    my ( $char, $alt) = map /(.)/, @_;
-    ( defined $char and length $char) or $char = ' ';
-    # replace blanks with $char. If $alt is given, replace nonblanks with $alt
-    if ( defined $alt ) {
-        $rule =~ s/(.)/$1 eq ' ' ? $char : $alt/ge;
-    } else {
-        $rule =~ s/ /$char/g if $char ne ' ';
+
+    if (ref($_[0]) eq "CODE")
+    {
+        my ($char_cb, $alt_cb) = @_;
+
+        my %callbacks =
+        (
+            'char' => { cb => $char_cb, idx => 0 },
+            'alt' => { cb => $alt_cb, idx => 0 },
+        );
+
+        my $calc_substitution = sub {
+            my $s = shift;
+
+            my $len = length($s);
+
+            my $which = substr($s, 0, 1) eq ' ' ? 'char' : 'alt';
+            my $rec = $callbacks{$which};
+
+            my $replacement = $rec->{cb}->(
+                $rec->{idx}++,
+                $len,
+            );
+            
+            $replacement = substr($replacement, 0, $len);
+            $replacement .= ' ' x ($len - length($replacement));
+
+            return $replacement;
+        };
+
+        $rule =~ s/((.)\2*)/$calc_substitution->($1)/ge;
+
+        return $rule;
     }
-    $rule;
+    else
+    {
+        my ( $char, $alt) = map /(.)/, @_;
+        ( defined $char and length $char) or $char = ' ';
+        # replace blanks with $char. If $alt is given, replace nonblanks
+        # with $alt
+        if ( defined $alt ) {
+            $rule =~ s/(.)/$1 eq ' ' ? $char : $alt/ge;
+        } else {
+            $rule =~ s/ /$char/g if $char ne ' ';
+        }
+        return $rule;
+    }
 }
 
 sub rule {
@@ -826,6 +864,10 @@ returns the total number of lines in a table, including title lines
 and body lines. For orthogonality, the synonym table_height() also
 exists.
 
+=item table_height()
+
+Same as C<< $table->height() >>.
+
 =item title_height()
 
     $tb->title_height
@@ -924,6 +966,13 @@ range described by $line_number and $n to the existing lines.  If
 $n is 0 or negative, no lines are returned (an empty string in scalar
 context).
 
+=item stringify()
+
+Returns a string representation of the table. This method is called for
+stringification by overload.
+
+    my @table_strings = map { $_->stringify() } @tables;
+
 =item title()
 
 Returns lines from the title area of a table, where the column titles
@@ -941,6 +990,9 @@ line.  Parameters and response to context are as with C<table()>.
     $tb->rule;
     $tb->rule( $char);
     $tb->rule( $char, $char1);
+    $tb->rule( sub { my ($index, $len) = @_; }, 
+               sub { my ($index, $len) = @_; },
+    );
 
 Returns a rule for the table.
 
@@ -959,6 +1011,12 @@ popular representation of line crossings.
 
 C<rule()> uses the column separators for the title section if there
 is a difference.
+
+If callbacks are specified instead of the characters, then they receive the
+index of the section of the rule they need to render and its desired length in
+characters, and should return the string to put there. The indexes given
+are 0 based (where 0 is either the left column separator or the leftmost
+cell) and the strings will be trimmed or extended in the replacement.
 
 =item body_rule()
 
@@ -1004,8 +1062,14 @@ same author.
 
 =head1 AUTHOR
 
+=head2 MAINTAINER
+
+Shlomi Fish, L<http://www.shlomifish.org/> - CPAN ID: "SHLOMIF".
+
+=head2 ORIGINAL AUTHOR
+
     Anno Siegel
-    CPAN ID: ANNO
+    CPAN ID: ANNO 
     siegel@zrz.tu-berlin.de
     http://www.tu-berlin.de/~siegel
 
@@ -1018,9 +1082,39 @@ it and/or modify it under the same terms as Perl itself.
 The full text of the license can be found in the
 LICENSE file included with this module.
 
+=head2 DISCLAIMER
+
+Shlomi Fish and future maintainers hereby disclaim all explicit and implicit
+copyrights on their modifications to this code, and put their modifications
+under your option of:
+
+=over 4
+
+=item * The Public Domain (CC-Zero)
+
+L<http://creativecommons.org/choose/zero/>
+
+=item * The MIT/X11 License 
+
+L<http://www.opensource.org/licenses/mit-license.php> ; 
+L<http://en.wikipedia.org/wiki/MIT_License>
+
+=item * The Artistic License version 1.0 or 2.0
+
+L<http://www.opensource.org/licenses/artistic-license-2.0.php>
+
+=item * The GNU General Public License Version 1 or at your option any later version
+
+L<http://en.wikipedia.org/wiki/GNU_General_Public_License>
+
+=back
+
+All contributions submitted to the Text-Table github repository are assumed to 
+be under these terms. Contributions under different terms will be rejected.
+
 =head1 SEE ALSO
 
-Text::Aligner, perl(1).
+L<Text::Aligner>, L<perl(1)> .
 
 =cut
 

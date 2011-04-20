@@ -9,6 +9,7 @@ CVS/.*
 \.bak$
 ~$
 ^#
+.*.swp
 \.shar$
 \.tar$
 \.tgz$
@@ -18,3 +19,4 @@ _uu$
 ^ttt*
 ^dist/
 ^.cvs
+^Text-Table-
