@@ -1,6 +1,6 @@
 --- #YAML:1.0
 name:               Text-Table
-version:            1.118
+version:            1.119
 abstract:           Organize Data in Tables
 author:
     - Anno Siegel (siegel@zrz.tu-berlin.de)
