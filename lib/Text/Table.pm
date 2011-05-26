@@ -1,12 +1,15 @@
 # Text::Table - Organize Data in Tables
 package Text::Table;
+
 use strict;
 use warnings;
+
+use List::Util qw(sum max);
 
 use Text::Aligner qw(align);
 
 BEGIN {
-    our $VERSION = '1.120';
+    our $VERSION = '1.121';
 }
 
 use overload
@@ -16,42 +19,74 @@ use overload
 ### User interface:  How to specify columns and column separators
 
 sub _is_sep {
-    local $_ = shift;
-    defined and ( ref eq 'SCALAR' or ( ref eq 'HASH' and $_->{ is_sep}));
+    my $datum = shift;
+
+    return 
+    (
+        defined($datum) 
+            and
+        (
+            (ref($datum) eq 'SCALAR')
+                    or
+            (ref($datum) eq 'HASH' and $datum->{_is_sep})
+        )
+    );
+}
+
+sub _get_sep_title_body
+{
+    my $sep = shift;
+
+    return
+        +( ref($sep) eq 'HASH' )
+        ? @{ $sep }{qw(title body)}
+        : split( /\n/, ${$sep}, -1 ) ;
 }
 
 sub _parse_sep {
-    local $_ = shift;
-    defined $_ or $_ = '';
-    my ( $title, $body);
-    if ( ref eq 'HASH' ) {
-        ( $title, $body) = @{ $_}{ qw( title body)};
-    } else {
-        ( $title, $body) = split /\n/, $$_, -1;
+    my $sep = shift;
+
+    if (!defined($sep))
+    {
+        $sep = '';
     }
-    $body = $title unless defined $body;
-    align( 'left', $title, $body);
+
+    my ($title, $body) = _get_sep_title_body($sep);
+
+    if (!defined($body))
+    {
+        $body = $title;
+    }
+
+    ($title, $body) = align( 'left', $title, $body);
+
+    return
     {
         is_sep => 1,
         title  => $title,
         body   => $body,
-    }
+    };
 }
 
 sub _parse_spec {
-    local $_ = shift;
-    defined $_ or $_ = '';
+    my $spec = shift;
+
+    if (!defined($spec))
+    {
+        $spec = '';
+    }
+
     my $alispec = qr/^ *(?:left|center|right|num|point|auto)/;
     my ( $title, $align, $align_title, $align_title_lines, $sample);
     if ( ref eq 'HASH' ) {
         ( $title, $align, $align_title, $align_title_lines, $sample) =
-            @{ $_}{ qw( title align align_title align_title_lines sample)};
+            @{$spec}{qw( title align align_title align_title_lines sample )};
     } else {
         my $alispec = qr/&(.*)/;
-        if ( $_ =~ $alispec ) {
-            ( $title, $align, $sample) = /(.*)^$alispec\n?(.*)/sm;
+        if ( $spec =~ $alispec ) {
+            ($title, $align, $sample) = ($spec =~ /(.*)^$alispec\n?(.*)/sm);
         } else {
-            $title = $_;
+            $title = $spec;
         }
         defined and chomp for $title, $sample;
     }
@@ -80,20 +115,96 @@ sub _parse_spec {
         );
         $align_title_lines = 'left';
     }
+
+    return
     {
         title             => $title,
         align             => $align,
         align_title       => $align_title,
         align_title_lines => $align_title_lines,
         sample            => $sample,
-    }
+    };
 }
 
 ### table creation
 
-sub new {
+sub new
+{
     my $tb = bless {}, shift;
-    $tb->_entitle( @_);
+
+    return $tb->_entitle( @_);
+}
+
+sub _blank
+{
+    my $self = shift;
+
+    if (@_)
+    {
+        $self->{blank} = shift;
+    }
+
+    return $self->{blank};
+}
+
+sub _cols
+{
+    my $self = shift;
+
+    if (@_)
+    {
+        $self->{cols} = shift;
+    }
+
+    return $self->{cols};
+}
+
+sub _forms
+{
+    my $self = shift;
+
+    if (@_)
+    {
+        $self->{forms} = shift;
+    }
+
+    return $self->{forms};
+}
+
+sub _lines
+{
+    my $self = shift;
+
+    if (@_)
+    {
+        $self->{lines} = shift;
+    }
+
+    return $self->{lines};
+}
+
+sub _spec
+{
+    my $self = shift;
+
+    if (@_)
+    {
+        $self->{spec} = shift;
+    }
+
+    return $self->{spec};
+}
+
+sub _titles
+{
+    my $self = shift;
+
+    if (@_)
+    {
+        $self->{titles} = shift;
+    }
+
+    return $self->{titles};
 }
 
 sub _entitle {
@@ -113,37 +224,57 @@ sub _entitle {
     }
     push @seps, $sep;
     # build sprintf formats from separators
-    my $title_form =
-        _compile_format( map defined() ? $_->{ title} : undef, @seps);
-    my $body_form  =
-        _compile_format( map defined() ? $_->{ body} : undef, @seps);
+    my $title_form = _compile_field_format('title', \@seps);
+    my $body_form = _compile_field_format('body', \@seps);
 
     # pre_align titles
-    my @titles = map [ @{ $_->{ title}}], @spec;
-    my $title_height = 0;
-    _to_max( $title_height, scalar @$_) for @titles;
+    my @titles = map { [ @{ $_->{title} } ] } @spec;
+
+    my $title_height = max(0, map { scalar(@$_) } @titles);
+
     push @$_, ( '') x ( $title_height - @$_) for @titles;
+
 #   align( 'left', @$_) for @titles; # ready for use'
     my @styles = map $_->{ align_title_lines}, @spec;
     align( shift @styles, @$_) for @titles; # in-place alignment
 
     # build data structure
-    %$tb = (
-        spec => \ @spec,                     # column spec for reuse
-        titles => \ @titles,                 # titles, pre-aligned
-        cols => [ map [], 1 .. @spec],       # data columns
-        forms => [ $title_form, $body_form], # separators condensed
-    );
+    $tb->_spec(\@spec);
+    $tb->_cols([ map [], 1 .. @spec]);
+    $tb->_forms([ $title_form, $body_form]); # separators condensed
+    $tb->_titles(\@titles);
+
     $tb->_clear_cache;
+
+    return $tb;
 }
 
 # sprintf-format for line assembly, using separators
 sub _compile_format {
-   my @seps = @_; # mix of strings and undef (for default)
-   defined or $_ = '' for @seps[ 0, -1]; # first and last default to empty
-   defined or $_ = ' ' for @seps; # others default to single space
-   s/%/%%/g for @seps; # protect against sprintf
-   join '%s', @seps;
+   my $seps = shift; # mix of strings and undef (for default)
+
+   for my $idx (0 .. $#$seps)
+   {
+        if (!defined($seps->[$idx]))
+        {
+            $seps->[$idx] = ($idx == 0 or $idx == $#$seps) ? '' : q{ };
+        }
+        else
+        {
+            # protect against sprintf
+            $seps->[$idx] =~ s/%/%%/g;
+        }
+   }
+   return join '%s', @$seps;
+}
+
+sub _compile_field_format
+{
+    my ($field, $seps) = @_;
+
+    return _compile_format(
+        [map { defined($_) ? $_->{$field} : undef } @$seps] 
+    );
 }
 
 # reverse format compilation (used by colrange())
@@ -151,7 +282,7 @@ sub _recover_separators {
     my $format = shift;
     my @seps = split /(?<!%)%s/, $format, -1;
     s/%%/%/g for @seps;
-    @seps;
+    return \@seps;
 }
 
 # select some columns, (optionally if in [...]), and add new separators
@@ -163,10 +294,16 @@ sub select {
     # _select_group, but not all)
     my @sel = map $tb->_check_index( $_), grep !_is_sep( $_), @args;
     # replace indices with column spec to create subtable
-    ! _is_sep( $_) and $_ = $tb->{ spec}->[ $_] for @args;
+    for my $arg (@args)
+    {
+        if (! _is_sep($arg))
+        {
+            $arg = $tb->_spec->[ $arg];
+        }
+    }
     my $sub = ref( $tb)->new( @args);
     # sneak in data columns
-    @{ $sub->{ cols}} = map [ @$_ ], @{ $tb->{ cols}}[ @sel];
+    @{ $sub->{ cols}} = map { [ @$_ ] } @{ $tb->_cols}[ @sel];
     $sub;
 }
 
@@ -178,7 +315,7 @@ sub _select_group {
     for ( @$group ) {
         next if _is_sep( $_);
         $tb->_check_index( $_);
-        return @$group if grep $_, @{ $tb->{ cols}->[ $_]};
+        return @$group if grep $_, @{ $tb->_cols->[ $_]};
         return; # no more tries after non-sep was found
     }
     return; # no column index in group, no select
@@ -199,7 +336,14 @@ sub _check_index {
 
 ### data entry
 
-sub _clear_cache { @{ $_[ 0]}{ qw( lines blank)} = (); $_[ 0] }
+sub _clear_cache { 
+    my ($tb) = @_;
+    
+    $tb->_blank(undef());
+    $tb->_lines(undef());
+
+    return;
+}
 
 # add one data line or split the line into follow-up lines
 sub add {
@@ -208,14 +352,19 @@ sub add {
 
     $tb->_add( @$_) for _transpose( map [ defined() ? split( /\n/ ) : '' ], @_);
     $tb->_clear_cache;
+
+    return $tb;
 }   
 
 # add one data line
 sub _add {
     my $tb = shift;
-    push @$_, shift for @{ $tb->{ cols}};
+
+    push @$_, shift for @{ $tb->_cols};
+
     $tb->_clear_cache;
-    $tb;
+
+    return $tb;
 }
 
 # add one or more data lines
@@ -230,9 +379,12 @@ sub load {
 
 sub clear {
     my $tb = shift;
-    $_ = [] for @{ $tb->{ cols}};
+
+    $_ = [] for @{ $tb->_cols};
+
     $tb->_clear_cache;
-    $tb;
+
+    return $tb;
 }
 
 ### access to output area
@@ -243,10 +395,15 @@ sub clear {
 sub n_cols { scalar @{ $_[0]->{ spec}} }
 
 # number of title lines
-sub title_height { $_[ 0]->n_cols and scalar @{ $_[ 0]->{ titles}->[ 0]} }
+sub title_height { $_[ 0]->n_cols and scalar @{ $_[ 0]->_titles->[ 0]} }
 
 # number of data lines
-sub body_height { $_[ 0]->n_cols and scalar @{ $_[ 0]->{ cols}->[ 0]} }
+sub body_height
+{ 
+    my ($tb) = @_;
+
+    return ($tb->n_cols && scalar @{ $tb->_cols->[0] });
+}
 
 # total height
 sub table_height { $_[ 0]->title_height + $_[ 0]->body_height }
@@ -260,19 +417,40 @@ sub width {
 # start and width of each column
 sub colrange {
     my ( $tb, $col_index) = @_;
-    return ( 0, 0) unless $tb->width; # width called, $tb->{ blank} exists now
+
+    return ( 0, 0) unless $tb->width; # width called, $tb->_blank() exists now
+
     $col_index ||= 0;
-    $col_index += $tb->n_cols if $col_index < 0;
-    _to_max( $col_index, 0);
-    _to_min( $col_index, $tb->n_cols);
-    my @widths = map length, @{ $tb->{ blank}}, '';
+
+    if ($col_index < 0)
+    {
+        $col_index += $tb->n_cols;
+    }
+
+    if ($col_index < 0)
+    {
+        $col_index = 0;
+    }
+    elsif ($col_index > $tb->n_cols)
+    {
+        $col_index = $tb->n_cols;
+    }
+
+    my @widths = map { length } @{ $tb->_blank}, '';
     @widths = @widths[ 0 .. $col_index];
+
     my $width = pop @widths;
-    my $pos = 0;
-    $pos += $_ for @widths;
-    my @seps = _recover_separators( $tb->{ forms}->[ 0]);
-    $pos += length for @seps[ 0 .. $col_index];
-    return ( $pos, $width);
+    my $pos = sum(@widths) || 0;
+
+    my $seps_aref = _recover_separators( $tb->_forms->[ 0]);
+
+    my $sep_sum = 0;
+    foreach my $sep (@$seps_aref[ 0 .. $col_index])
+    {
+        $sep_sum += length($sep);
+    }
+
+    return ( $pos+$sep_sum, $width ) ;
 }
 
 ## printable output
@@ -280,60 +458,96 @@ sub colrange {
 # whole table
 sub table {
     my $tb = shift;
-    $tb->_table_portion( $tb->height, 0, @_);
+
+    return $tb->_table_portion( $tb->height, 0, @_);
 }
 
 # only titles
 sub title {
     my $tb = shift;
-    $tb->_table_portion( $tb->title_height, 0, @_);
+
+    return $tb->_table_portion( $tb->title_height, 0, @_);
 }   
 
 # only body
 sub body {
     my $tb = shift;
-    $tb->_table_portion( $tb->body_height, $tb->title_height, @_);
+
+    return $tb->_table_portion( $tb->body_height, $tb->title_height, @_);
 }
 
-sub stringify { scalar shift()->table() }
+sub stringify
+{ 
+    my ($tb) = @_;
+
+    return (scalar ( $tb->table() ));
+}
 
 ### common internals
 
 # common representation of table(), title() and body()
-sub _table_portion {
+
+sub _table_portion_as_aref
+{
     my $tb = shift;
-    my ( $total, $offset) = ( shift, shift);
+
+    my $total = shift;
+    my $offset = shift;
+
     my ( $from, $n) = ( 0, $total); # if no parameters
+
     if ( @_ ) {
         $from = shift;
         $n = @_ ? shift : 1; # one line if not given
     }
+
     ( $from, $n) = _limit_range( $total, $from, $n);
-    my @lines = do {
-        my $limit = $tb->title_height; # title format below
-        $from += $offset;
+
+    my $limit = $tb->title_height; # title format below
+    $from += $offset;
+
+    return
+    [
         map $tb->_assemble_line( $_ >= $limit, $tb->_table_line( $_)),
-            $from .. $from + $n - 1;
-    };
-    return @lines if wantarray;
-    return join '', @lines;
+        $from .. $from + $n - 1
+    ];
 }
 
-sub _limit_range {
+sub _table_portion
+{
+    my $tb = shift;
+
+    my $lines_aref = $tb->_table_portion_as_aref(@_);
+
+    return (wantarray ? @$lines_aref : join('', @$lines_aref));
+}
+
+sub _limit_range
+{
     my ( $total, $from, $n) = @_;
+
     $from ||= 0;
     $from += $total if $from < 0;
     $n = $total unless defined $n;
+
     return ( 0, 0) if $from + $n < 0 or $from >= $total;
+
     $from = 0 if $from < 0;
     $n = $total - $from if $n > $total - $from;
-    ( $from, $n);
+
+    return( $from, $n);
 }
 
 # get table line (formatted, including titles). fill cache if needed
 sub _table_line {
-    my $tb = shift;
-    ($tb->{ lines} ||= [ $tb->_build_table_lines])->[ shift];
+    my ($tb, $idx) = @_;
+
+    if (! $tb->_lines)
+    {
+        $tb->_lines([ $tb->_build_table_lines ]);
+    }
+
+    return $tb->_lines->[$idx];
 }
 
 # build array of lines of justified data items
@@ -341,55 +555,60 @@ sub _build_table_lines {
     my $tb = shift;
 
     # copy data columns, replacing undef with ''
-    my @cols = map [ map defined() ? $_ : '', @$_], @{ $tb->{ cols}};
+    my @cols = map [ map { defined($_) ? $_ : ''} @$_], @{ $tb->_cols() };
 
     # add set of empty strings for blank line (needed to build horizontal rules)
     push @$_, '' for @cols;
 
     # add samples for minimum alignment
-    my @samples = map $_->{ sample}, @{ $tb->{ spec}};
-    push @$_, @{ shift @samples} for @cols;
+    my @samples = map { $_->{ sample} } @{ $tb->_spec };
+    foreach my $col (@cols)
+    {
+        push @{$col}, @{ shift(@samples) };
+    }
 
     # align to style
-    my @styles = map $_->{ align}, @{ $tb->{ spec}};
+    my @styles = map { $_->{ align} } @{ $tb->_spec };
     align( shift @styles, @$_) for @cols;
     # trim off samples, but leave blank line
     splice @$_, 1 + $tb->body_height for @cols; # + 1 for blank line (brittle)
 
     # include titles
-    my @titles = @{ $tb->{ titles}};
+    my @titles = @{ $tb->_titles};
     unshift @$_, @{ shift @titles} for @cols; # add pre-aligned titles
 
     # align title and body portions of columns
     # blank line will be there even with no data
-    @styles = map $_->{ align_title}, @{ $tb->{ spec}};
+    @styles = map { $_->{ align_title} } @{ $tb->_spec };
     align( shift @styles, @$_) for @cols; # in-place alignment
 
     # deposit a blank line, pulling it off the columns.
     # *_rule() knows this is done
-    $tb->{ blank} = [ map pop @$_, @cols];
+    $tb->_blank([ map pop @$_, @cols]);
 
-    _transpose_n( $tb->height, @cols); # bye-bye, @cols
+    return _transpose_n( $tb->height, \@cols); # bye-bye, @cols
 }
 
 # destructively transpose a number of lines/cols from an array of arrayrefs 
-sub _transpose_n ($@) {
-    my $n = shift;
-    map [ map shift @$_, @_], 1 .. $n;
+sub _transpose_n {
+    my ($n, $cols) = @_;
+
+    return map { [ map { shift @$_ } @$cols] } 1 .. $n;
 }
 
 # like _transpose_n, but find the number to transpose from max of given
-sub _transpose {
-    my $m;
-    _to_max( $m, scalar @$_) for @_, []; # make sure $m is defined
-    _transpose_n( $m, @_);
+sub _transpose
+{
+    my $m = max ( map { scalar(@$_) } @_, []);
+
+    return _transpose_n( $m, [@_]);
 }
 
 # make a line from a number of formatted data elements
 sub _assemble_line {
     my $tb = shift;
     my $in_body = shift; # 0 for title, 1 for body
-    sprintf( $tb->{ forms}->[ !!$in_body], @{ shift()}) . "\n";
+    return sprintf( $tb->_forms->[ !!$in_body], @{ shift()}) . "\n";
 }
 
 # build a rule line
@@ -397,7 +616,7 @@ sub _rule {
     my $tb = shift;
     my $in_body = shift;
     return '' unless $tb->width; # this builds the cache, hence $tb->{ blank}
-    my $rule = $tb->_assemble_line( $in_body, $tb->{ blank});
+    my $rule = $tb->_assemble_line( $in_body, $tb->_blank);
 
     if (ref($_[0]) eq "CODE")
     {
@@ -449,22 +668,12 @@ sub _rule {
 
 sub rule {
     my $tb = shift;
-    $tb->_rule( 0, @_);
+    return $tb->_rule( 0, @_);
 }
 
 sub body_rule {
     my $tb = shift;
-    $tb->_rule( 1, @_);
-}
-
-# min/max utilitiess (modifying first argument)
-
-sub _to_max {
-    defined $_[ 0] and $_[ 0] > $_[ 1] or $_[ 0] = $_[ 1] if defined $_[ 1];
-}
-
-sub _to_min {
-    defined $_[ 0] and $_[ 0] < $_[ 1] or $_[ 0] = $_[ 1] if defined $_[ 1];
+    return $tb->_rule( 1, @_);
 }
 
 ### warning behavior
@@ -473,26 +682,41 @@ use Carp;
 {
     my ( $warn, $fatal) = ( 0, 0);
 
-    sub warnings {
-        shift; # ignore class/object
-        local $_ = shift || 'on';
-        if ( $_ eq 'off' ) {
-            ( $warn, $fatal) = ( 0, 0);
-        } elsif ( $_ eq 'fatal' ) {
-            ( $warn, $fatal) = ( 1, 1);
-        } else {
-            ( $warn, $fatal) = ( 1, 0);
+    sub warnings
+    {
+        # Ignore the class/object.
+        my (undef, $toggle) = @_;
+
+        $toggle ||= 'on';
+        if ( $toggle eq 'off' )
+        {
+            ($warn, $fatal) = (0, 0);
         }
-        return 'fatal' if $fatal;
-        return 'on' if $warn;
-        return 'off';
+        elsif ( $toggle eq 'fatal' )
+        {
+            ($warn, $fatal) = (1, 1);
+        }
+        else
+        {
+            ($warn, $fatal) = (1, 0);
+        }
+        return $fatal ? 'fatal' : $warn ? 'on' : 'off';
     }
 
-    sub _warn {
+    sub _warn
+    {
         my $msg = shift;
+
         return unless $warn;
-        croak( $msg) if $fatal;
+
+        if ($fatal)
+        {
+            croak( $msg)
+        }
+
         carp( $msg);
+
+        return;
     }
 }
 
@@ -1046,7 +1270,7 @@ can also be called as an object method (C<$tb-E<gt>warnings( ...)>).
 
 =head1 VERSION
     
-This document pertains to Text::Table version 1.107
+This document pertains to Text::Table version 1.121
 
 =head1 BUGS
 
