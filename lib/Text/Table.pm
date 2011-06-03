@@ -9,7 +9,7 @@ use List::Util qw(sum max);
 use Text::Aligner qw(align);
 
 BEGIN {
-    our $VERSION = '1.121';
+    our $VERSION = '1.122';
 }
 
 use overload
@@ -28,7 +28,7 @@ sub _is_sep {
         (
             (ref($datum) eq 'SCALAR')
                     or
-            (ref($datum) eq 'HASH' and $datum->{_is_sep})
+            (ref($datum) eq 'HASH' and $datum->{is_sep})
         )
     );
 }
@@ -68,6 +68,25 @@ sub _parse_sep {
     };
 }
 
+sub _default_if_empty
+{
+    my ($ref, $default) = @_;
+
+    if (! (defined($$ref) && length($$ref)))
+    {
+        $$ref = $default;
+    }
+
+    return;
+}
+
+sub _is_align
+{
+    my $align = shift;
+
+    return $align =~ /\A(?:left|center|right)/;
+}
+
 sub _parse_spec {
     my $spec = shift;
 
@@ -90,9 +109,22 @@ sub _parse_spec {
         }
         defined and chomp for $title, $sample;
     }
-    defined or $_ = [] for $title, $sample;
-    defined $align and length $align or $align = 'auto';
-    ref eq 'ARRAY' or $_ = [ split /\n/, $_, -1] for $title, $sample;
+
+    # Assign default values.
+    foreach my $x ($title, $sample)
+    {
+        if (!defined($x))
+        {
+            $x = [];
+        }
+        elsif (ref($x) ne 'ARRAY')
+        {
+            $x = [ split /\n/, $x, -1];
+        }
+    }
+
+    _default_if_empty(\$align, 'auto');
+
     unless (
         ref $align eq 'Regex' or
         $align =~ /^(?:left|center|right|num\(?|point\(?|auto)/
@@ -100,16 +132,19 @@ sub _parse_spec {
         _warn( "Invalid align specification: '$align', using 'auto'");
         $align = 'auto';
     }
-    defined $align_title and length $align_title or $align_title = 'left';
-    unless ( $align_title =~ /^(?:left|center|right)/ ) {
+    
+    _default_if_empty(\$align_title, 'left');
+
+    if ( ! _is_align($align_title) ) {
         _warn( "Invalid align_title specification: " .
             "'$align_title', using 'left'",
         );
         $align_title = 'left';
     }
-    defined $align_title_lines and length $align_title_lines or
-        $align_title_lines = $align_title;
-    unless ( $align_title_lines =~ /^(?:left|center|right)/ ) {
+    
+    _default_if_empty(\$align_title_lines, $align_title);
+
+    if ( ! _is_align($align_title_lines) ) {
         _warn( "Invalid align_title_lines specification: " .
             "'$align_title_lines', using 'left'",
         );
@@ -232,11 +267,15 @@ sub _entitle {
 
     my $title_height = max(0, map { scalar(@$_) } @titles);
 
-    push @$_, ( '') x ( $title_height - @$_) for @titles;
+    foreach my $title (@titles)
+    {
+        push @{$title}, ( '') x ( $title_height - @{$title});
+    }
 
-#   align( 'left', @$_) for @titles; # ready for use'
-    my @styles = map $_->{ align_title_lines}, @spec;
-    align( shift @styles, @$_) for @titles; # in-place alignment
+    foreach my $t_idx (0 .. $#titles)
+    {
+        align($spec[$t_idx]->{align_title_lines}, @{$titles[$t_idx]});
+    }
 
     # build data structure
     $tb->_spec(\@spec);
@@ -350,7 +389,12 @@ sub add {
     my $tb = shift;
     $tb->_entitle( ( '') x @_) unless $tb->n_cols;
 
-    $tb->_add( @$_) for _transpose( map [ defined() ? split( /\n/ ) : '' ], @_);
+    $tb->_add( @$_) for 
+        _transpose( 
+            [
+                map { [ defined() ? split( /\n/ ) : '' ] } @_
+            ]
+        );
     $tb->_clear_cache;
 
     return $tb;
@@ -406,12 +450,20 @@ sub body_height
 }
 
 # total height
-sub table_height { $_[ 0]->title_height + $_[ 0]->body_height }
-BEGIN { *height = \ &table_height} # alias
+sub table_height
+{ 
+    my $tb = shift;
+    return $tb->title_height + $tb->body_height;
+}
+
+BEGIN { *height = \&table_height; } # alias
 
 # number of characters in each table line. need to build the table to know
-sub width {
-    $_[ 0]->height and length( ($_[ 0]->table( 0))[ 0]) - 1;
+sub width
+{
+    my ($tb) = @_;
+
+    return $tb->height && (length( ($tb->table(0))[0] ) - 1);
 }
 
 # start and width of each column
@@ -555,36 +607,58 @@ sub _build_table_lines {
     my $tb = shift;
 
     # copy data columns, replacing undef with ''
-    my @cols = map [ map { defined($_) ? $_ : ''} @$_], @{ $tb->_cols() };
+    my @cols =
+        map
+        { [ map { defined($_) ? $_ : '' } @$_ ] }
+        @{ $tb->_cols() } ;
 
     # add set of empty strings for blank line (needed to build horizontal rules)
-    push @$_, '' for @cols;
-
-    # add samples for minimum alignment
-    my @samples = map { $_->{ sample} } @{ $tb->_spec };
     foreach my $col (@cols)
     {
-        push @{$col}, @{ shift(@samples) };
+        push @$col, '';
+    }
+
+    # add samples for minimum alignment
+    foreach my $col_idx (0 .. $#cols)
+    {
+        push @{$cols[$col_idx]}, @{$tb->_spec->[$col_idx]->{sample}};
     }
 
     # align to style
-    my @styles = map { $_->{ align} } @{ $tb->_spec };
-    align( shift @styles, @$_) for @cols;
+    foreach my $col_idx (0 .. $#cols)
+    {
+        align($tb->_spec->[$col_idx]->{align}, @{$cols[$col_idx]});
+    }
+
     # trim off samples, but leave blank line
-    splice @$_, 1 + $tb->body_height for @cols; # + 1 for blank line (brittle)
+    foreach my $col (@cols)
+    {
+        splice( @{$col}, 1 + $tb->body_height );
+    }
 
     # include titles
-    my @titles = @{ $tb->_titles};
-    unshift @$_, @{ shift @titles} for @cols; # add pre-aligned titles
+    foreach my $col_idx (0 .. $#cols)
+    {
+        unshift @{$cols[$col_idx]}, @{$tb->_titles->[$col_idx]};
+    }
 
     # align title and body portions of columns
     # blank line will be there even with no data
-    @styles = map { $_->{ align_title} } @{ $tb->_spec };
-    align( shift @styles, @$_) for @cols; # in-place alignment
+    foreach my $col_idx (0 .. $#cols)
+    {
+        align($tb->_spec->[$col_idx]->{align_title}, @{$cols[$col_idx]});
+    }
 
     # deposit a blank line, pulling it off the columns.
     # *_rule() knows this is done
-    $tb->_blank([ map pop @$_, @cols]);
+    my @blank;
+
+    foreach my $col (@cols)
+    {
+        push @blank, pop(@$col);
+    }
+
+    $tb->_blank(\@blank);
 
     return _transpose_n( $tb->height, \@cols); # bye-bye, @cols
 }
@@ -599,71 +673,107 @@ sub _transpose_n {
 # like _transpose_n, but find the number to transpose from max of given
 sub _transpose
 {
-    my $m = max ( map { scalar(@$_) } @_, []);
+    my ($cols) = @_;
 
-    return _transpose_n( $m, [@_]);
+    my $m = max ( map { scalar(@$_) } @$cols, []);
+
+    return _transpose_n( $m, $cols);
 }
 
 # make a line from a number of formatted data elements
 sub _assemble_line {
-    my $tb = shift;
-    my $in_body = shift; # 0 for title, 1 for body
-    return sprintf( $tb->_forms->[ !!$in_body], @{ shift()}) . "\n";
+    my ($tb, $in_body, $line_aref) = @_;
+
+    return sprintf( $tb->_forms->[ !!$in_body], @$line_aref) . "\n";
+}
+
+sub _text_rule
+{
+    my ($tb, $rule, $char, $alt) = @_;
+
+    # replace blanks with $char. If $alt is given, replace nonblanks
+    # with $alt
+    if ( defined $alt )
+    {
+        $rule =~ s/(.)/$1 eq ' ' ? $char : $alt/ge;
+    }
+    else
+    {
+        $rule =~ s/ /$char/g if $char ne ' ';
+    }
+
+    return $rule;
 }
 
 # build a rule line
 sub _rule {
     my $tb = shift;
-    my $in_body = shift;
-    return '' unless $tb->width; # this builds the cache, hence $tb->{ blank}
+
+    return + (!$tb->width) ? '' : $tb->_positive_width_rule(@_);
+}
+
+sub _positive_width_rule
+{
+    my ($tb, $in_body, $char, $alt) = @_;
+
     my $rule = $tb->_assemble_line( $in_body, $tb->_blank);
 
-    if (ref($_[0]) eq "CODE")
+    return $tb->_render_rule($rule, $char, $alt);
+}
+
+sub _render_rule
+{
+    my ($tb, $rule, $char, $alt) = @_;
+
+    if (ref($char) eq "CODE")
     {
-        my ($char_cb, $alt_cb) = @_;
-
-        my %callbacks =
-        (
-            'char' => { cb => $char_cb, idx => 0 },
-            'alt' => { cb => $alt_cb, idx => 0 },
-        );
-
-        my $calc_substitution = sub {
-            my $s = shift;
-
-            my $len = length($s);
-
-            my $which = substr($s, 0, 1) eq ' ' ? 'char' : 'alt';
-            my $rec = $callbacks{$which};
-
-            my $replacement = $rec->{cb}->(
-                $rec->{idx}++,
-                $len,
-            );
-            
-            $replacement = substr($replacement, 0, $len);
-            $replacement .= ' ' x ($len - length($replacement));
-
-            return $replacement;
-        };
-
-        $rule =~ s/((.)\2*)/$calc_substitution->($1)/ge;
-
-        return $rule;
+        return $tb->_render_rule_with_callbacks($rule, $char, $alt);
     }
     else
     {
-        my ( $char, $alt) = map /(.)/, @_;
-        ( defined $char and length $char) or $char = ' ';
-        # replace blanks with $char. If $alt is given, replace nonblanks
-        # with $alt
-        if ( defined $alt ) {
-            $rule =~ s/(.)/$1 eq ' ' ? $char : $alt/ge;
-        } else {
-            $rule =~ s/ /$char/g if $char ne ' ';
-        }
-        return $rule;
+        _default_if_empty(\$char, ' ');
+
+        return $tb->_text_rule($rule, $char, $alt);
     }
+}
+
+sub _get_fixed_len_string
+{
+    my ($s, $len) = @_;
+
+    $s  = substr($s, 0, $len);
+    $s .= ' ' x ($len - length($s));
+
+    return $s;
+}
+
+sub _render_rule_with_callbacks
+{
+    my ($tb, $rule, $char, $alt) = @_;
+
+    my %callbacks =
+    (
+        'char' => { cb => $char, idx => 0, },
+        'alt' => { cb => $alt, idx => 0, },
+    );
+
+    my $calc_substitution = sub {
+        my $s = shift;
+
+        my $len = length($s);
+
+        my $which = (($s =~ /\A /) ? 'char' : 'alt');
+        my $rec = $callbacks{$which};
+
+        return _get_fixed_len_string(
+            scalar ($rec->{cb}->($rec->{idx}++, $len)),
+            $len,
+        );
+    };
+
+    $rule =~ s/((.)\2*)/$calc_substitution->($1)/ge;
+
+    return $rule;
 }
 
 sub rule {
