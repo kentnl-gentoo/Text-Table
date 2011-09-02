@@ -9,7 +9,7 @@ use List::Util qw(sum max);
 use Text::Aligner qw(align);
 
 BEGIN {
-    our $VERSION = '1.123';
+    our $VERSION = '1.124';
 }
 
 use overload
@@ -424,7 +424,10 @@ sub load {
 sub clear {
     my $tb = shift;
 
-    $_ = [] for @{ $tb->_cols};
+    foreach my $col (@{ $tb->_cols} )
+    {
+        $col = [];
+    }
 
     $tb->_clear_cache;
 
@@ -466,11 +469,9 @@ sub width
     return $tb->height && (length( ($tb->table(0))[0] ) - 1);
 }
 
-# start and width of each column
-sub colrange {
-    my ( $tb, $col_index) = @_;
-
-    return ( 0, 0) unless $tb->width; # width called, $tb->_blank() exists now
+sub _normalize_col_index
+{
+    my ($tb, $col_index) = @_;
 
     $col_index ||= 0;
 
@@ -488,6 +489,16 @@ sub colrange {
         $col_index = $tb->n_cols;
     }
 
+    return $col_index;
+}
+
+# start and width of each column
+sub colrange {
+    my ( $tb, $proto_col_index) = @_;
+
+    my $col_index = $tb->_normalize_col_index($proto_col_index);
+
+    return ( 0, 0) unless $tb->width; # width called, $tb->_blank() exists now
     my @widths = map { length } @{ $tb->_blank}, '';
     @widths = @widths[ 0 .. $col_index];
 
@@ -560,7 +571,7 @@ sub _table_portion_as_aref
 
     return
     [
-        map $tb->_assemble_line( $_ >= $limit, $tb->_table_line( $_)),
+        map $tb->_assemble_line( $_ >= $limit, $tb->_table_line( $_), 0),
         $from .. $from + $n - 1
     ];
 }
@@ -682,9 +693,16 @@ sub _transpose
 
 # make a line from a number of formatted data elements
 sub _assemble_line {
-    my ($tb, $in_body, $line_aref) = @_;
+    my ($tb, $in_body, $line_aref, $replace_spaces) = @_;
 
-    return sprintf( $tb->_forms->[ !!$in_body], @$line_aref) . "\n";
+    my $format = $tb->_forms->[ !!$in_body];
+
+    if ($replace_spaces)
+    {
+        $format =~ s/\s/=/g;
+    }
+
+    return sprintf($format, @$line_aref) . "\n";
 }
 
 sub _text_rule
@@ -716,7 +734,9 @@ sub _positive_width_rule
 {
     my ($tb, $in_body, $char, $alt) = @_;
 
-    my $rule = $tb->_assemble_line( $in_body, $tb->_blank);
+    my $rule = $tb->_assemble_line( $in_body, $tb->_blank,
+        ((ref($char) eq "CODE") ? 1 : 0),
+    );
 
     return $tb->_render_rule($rule, $char, $alt);
 }
@@ -885,7 +905,7 @@ in dependence on the data present.
 
 In the simplest case, if all you want is a number of (untitled) columns,
 you create an unspecified table and start adding data to it.  The number
-of columns is taken fronm the first line of data.
+of columns is taken from the first line of data.
 
 To specify a table you specify its columns.  A column description
 can contain a title and alignment requirements for the data, both
