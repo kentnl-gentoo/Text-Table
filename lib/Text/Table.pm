@@ -9,7 +9,7 @@ use List::Util qw(sum max);
 use Text::Aligner qw(align);
 
 BEGIN {
-    our $VERSION = '1.125';
+    our $VERSION = '1.126';
 }
 
 use overload
@@ -132,7 +132,7 @@ sub _parse_spec {
     _default_if_empty(\$align, 'auto');
 
     unless (
-        ref $align eq 'Regex' or
+        ref $align eq 'Regexp' or
         $align =~ /^(?:left|center|right|num\(?|point\(?|auto)/
     ) {
         _warn( "Invalid align specification: '$align', using 'auto'");
