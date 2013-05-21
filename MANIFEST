@@ -8,6 +8,7 @@ LICENSE
 Makefile.PL
 MANIFEST
 MANIFEST.SKIP
+META.json
 META.yml
 README
 t/01_ini.t
@@ -15,6 +16,7 @@ t/10_Table.t
 t/11_Variable_Rule.t
 t/12_column_seps_as_hashes.t
 t/13_callback_rules_with_whitespace.t
+t/cpan-changes.t
 t/pod-coverage.t
 t/pod.t
-META.json
+t/style-trailing-space.t
